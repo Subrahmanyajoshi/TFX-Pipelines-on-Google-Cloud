@@ -1,3 +1,4 @@
+import functools
 from typing import List, Text
 
 import absl
@@ -10,6 +11,10 @@ from tfx.components.trainer.executor import TrainerFnArgs
 from tfx.components.trainer.fn_args_utils import DataAccessor
 from tfx.components.tuner.component import TunerFnResult
 from tfx_bsl.tfxio import dataset_options
+
+EPOCHS = 1
+TRAIN_BATCH_SIZE = 64
+EVAL_BATCH_SIZE = 64
 
 
 def _gzip_reader_fn(filenames):
@@ -90,7 +95,7 @@ def _build_keras_model(hparams: keras_tuner.HyperParameters,
         tf.feature_column.numeric_column(
             key=Feature.transformed_name(key),
             shape=())
-        for key in Feature.NUMERIC_FEATURE_KEYS
+        for key in Feature.FEATURE_KEYS
     ]
 
     input_layers = {
@@ -98,33 +103,11 @@ def _build_keras_model(hparams: keras_tuner.HyperParameters,
         for column in deep_columns
     }
 
-    categorical_columns = [
-        tf.feature_column.categorical_column_with_identity(
-            key=Feature.transformed_name(key),
-            num_buckets=tf_transform_output.num_buckets_for_transformed_feature(Feature.transformed_name(key)),
-            default_value=0)
-        for key in Feature.CATEGORICAL_FEATURE_KEYS
-    ]
-
-    wide_columns = [
-        tf.feature_column.indicator_column(categorical_column)
-        for categorical_column in categorical_columns
-    ]
-
-    input_layers.update({
-        column.categorical_column.key: tf.keras.layers.Input(name=column.categorical_column.key, shape=(),
-                                                             dtype=tf.int32)
-        for column in wide_columns
-    })
-
     deep = tf.keras.layers.DenseFeature(deep_columns)(input_layers)
     for n in range(int(hparams.get('n_layers'))):
         deep = tf.keras.layers.Dense(units=hparams.get('n_units_' + str(n + 1)))(deep)
 
-    wide = tf.keras.layers.DenseFeature(wide_columns)(input_layers)
-
-    output = tf.keras.layers.Dense(Feature.NUM_CLASSES, activation='softmax')(
-        tf.keras.layers.concatenate([deep, wide]))
+    output = tf.keras.layers.Dense(Feature.NUM_CLASSES, activation='softmax')(deep)
 
     model = tf.keras.Model(input_layers, output)
     model.compile(
@@ -134,3 +117,123 @@ def _build_keras_model(hparams: keras_tuner.HyperParameters,
     model.summary(print_fn=absl.logging.info)
 
     return model
+
+
+# TFX Tuner will call this function.
+def tuner_fn(fn_args: TrainerFnArgs) -> TunerFnResult:
+    """Build the tuner using the KerasTuner API.
+    Args:
+      fn_args: Holds args as name/value pairs.
+        - working_dir: working dir for tuning.
+        - train_files: List of file paths containing training tf.Example data.
+        - eval_files: List of file paths containing eval tf.Example data.
+        - train_steps: number of train steps.
+        - eval_steps: number of eval steps.
+        - schema_path: optional schema of the input data.
+        - transform_graph_path: optional transform graph produced by TFT.
+    Returns:
+      A namedtuple contains the following:
+        - tuner: A BaseTuner that will be used for tuning.
+        - fit_kwargs: Args to pass to tuner's run_trial function for fitting the
+                      model , e.g., the training and validation dataset. Required
+                      args depend on the above tuner's implementation.
+    """
+    transform_graph = tft.TFTransformOutput(fn_args.transform_graph_path)
+
+    # Construct a build_keras_model_fn that just takes hyperparams from get_hyperparameters as input.
+    build_keras_model_fn = functools.partial(
+        _build_keras_model, tf_transform_output=transform_graph)
+
+    # BayesianOptimization is a subclass of kerastuner.Tuner which inherits from BaseTuner.
+    tuner = keras_tuner.BayesianOptimization(
+        build_keras_model_fn,
+        max_trials=10,
+        hyperparameters=_get_hyperparameters(),
+        # New entries allowed for n_units hyperparameter construction conditional on n_layers selected.
+        #       allow_new_entries=True,
+        #       tune_new_entries=True,
+        objective=keras_tuner.Objective('val_sparse_categorical_accuracy', 'max'),
+        directory=fn_args.working_dir,
+        project_name='covertype_tuning')
+
+    train_dataset = _input_fn(
+        fn_args.train_files,
+        fn_args.data_accessor,
+        transform_graph,
+        batch_size=TRAIN_BATCH_SIZE)
+
+    eval_dataset = _input_fn(
+        fn_args.eval_files,
+        fn_args.data_accessor,
+        transform_graph,
+        batch_size=EVAL_BATCH_SIZE)
+
+    return TunerFnResult(
+        tuner=tuner,
+        fit_kwargs={
+            'x': train_dataset,
+            'validation_data': eval_dataset,
+            'steps_per_epoch': fn_args.train_steps,
+            'validation_steps': fn_args.eval_steps
+        })
+
+
+# TFX Trainer will call this function.
+def run_fn(fn_args: TrainerFnArgs):
+    """Train the model based on given args.
+    Args:
+      fn_args: Holds args used to train the model as name/value pairs.
+    """
+
+    tf_transform_output = tft.TFTransformOutput(fn_args.transform_output)
+
+    train_dataset = _input_fn(
+        fn_args.train_files,
+        fn_args.data_accessor,
+        tf_transform_output,
+        TRAIN_BATCH_SIZE)
+
+    eval_dataset = _input_fn(
+        fn_args.eval_files,
+        fn_args.data_accessor,
+        tf_transform_output,
+        EVAL_BATCH_SIZE)
+
+    if fn_args.hyperparameters:
+        hparams = keras_tuner.HyperParameters.from_config(fn_args.hyperparameters)
+    else:
+        # This is a shown case when hyperparameters is decided and Tuner is removed
+        # from the pipeline. User can also inline the hyperparameters directly in
+        # _build_keras_model.
+        hparams = _get_hyperparameters()
+    absl.logging.info('HyperParameters for training: %s' % hparams.get_config())
+
+    # Distribute training over multiple replicas on the same machine.
+    mirrored_strategy = tf.distribute.MirroredStrategy()
+    with mirrored_strategy.scope():
+        model = _build_keras_model(
+            hparams=hparams,
+            tf_transform_output=tf_transform_output)
+
+    tensorboard_callback = tf.keras.callbacks.TensorBoard(
+        log_dir=fn_args.model_run_dir, update_freq='batch')
+
+    model.fit(
+        train_dataset,
+        epochs=EPOCHS,
+        steps_per_epoch=fn_args.train_steps,
+        validation_data=eval_dataset,
+        validation_steps=fn_args.eval_steps,
+        callbacks=[tensorboard_callback])
+
+    signatures = {
+        'serving_default':
+            _get_serve_tf_examples_fn(model,
+                                      tf_transform_output).get_concrete_function(
+                tf.TensorSpec(
+                    shape=[None],
+                    dtype=tf.string,
+                    name='examples')),
+    }
+
+    model.save(fn_args.serving_model_dir, save_format='tf', signatures=signatures)
