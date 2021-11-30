@@ -6,6 +6,7 @@ import keras_tuner
 import tensorflow as tf
 import tensorflow_transform as tft
 from features import Feature
+from tensorflow.keras import layers
 
 from tfx.components.trainer.executor import TrainerFnArgs
 from tfx.components.trainer.fn_args_utils import DataAccessor
@@ -103,11 +104,11 @@ def _build_keras_model(hparams: keras_tuner.HyperParameters,
         for column in deep_columns
     }
 
-    deep = tf.keras.layers.DenseFeature(deep_columns)(input_layers)
+    deep = layers.DenseFeatures(deep_columns)(input_layers)
     for n in range(int(hparams.get('n_layers'))):
-        deep = tf.keras.layers.Dense(units=hparams.get('n_units_' + str(n + 1)))(deep)
+        deep = layers.Dense(units=hparams.get('n_units_' + str(n + 1)))(deep)
 
-    output = tf.keras.layers.Dense(Feature.NUM_CLASSES, activation='softmax')(deep)
+    output = layers.Dense(Feature.NUM_CLASSES, activation='softmax')(deep)
 
     model = tf.keras.Model(input_layers, output)
     model.compile(
