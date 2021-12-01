@@ -1,8 +1,11 @@
+import os
+import pickle
 import tensorflow as tf
 from tensorflow.keras.preprocessing import sequence
 
 from features import Feature
 
+FEATURE_KEY = 'input'
 MAX_SEQUENCE_LENGTH = 500
 
 def _fill_in_missing(x):
@@ -21,16 +24,23 @@ def _fill_in_missing(x):
             default_value), axis=1)
 
 
-def preprocessing_fn(inputs, tokenizer):
+def preprocessing_fn(inputs, custom_config):
     """Preprocesses Dataset."""
-
+    
+    tokenizer_path = custom_config.get('tokenizer_path')
+    
+    os.system(f'gsutil -m cp {tokenizer_path} ./')
+    
+    with open(os.path.basename(tokenizer_path), 'rb') as handle:
+        tokenizer = pickle.load(handle)
+    
     outputs = {}
 
     key = Feature.transformed_name(Feature.FEATURE_KEY)
     # Fill in missing values and create dense tensors.
-    outputs[key] = _fill_in_missing(inputs[key])
+    outputs[key] = _fill_in_missing(inputs[Feature.FEATURE_KEY])
 
-    outputs[key] = tokenizer.texts_to_sequences(list(outputs[key]))
+    outputs[key] = tokenizer.texts_to_sequences(outputs[key])
     outputs[key] = sequence.pad_sequences(outputs[key], maxlen=MAX_SEQUENCE_LENGTH)
 
     # Convert label to dense tensor.
