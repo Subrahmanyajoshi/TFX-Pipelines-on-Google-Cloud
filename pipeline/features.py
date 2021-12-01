@@ -1,6 +1,6 @@
 
 class Feature(object):
-    FEATURE_KEYS = ['input']
+    FEATURE_KEY = 'input'
     LABEL_KEY = 'labels'
     NUM_CLASSES = 2
 

@@ -1,7 +1,9 @@
 import tensorflow as tf
+from tensorflow.keras.preprocessing import sequence
 
 from features import Feature
 
+MAX_SEQUENCE_LENGTH = 500
 
 def _fill_in_missing(x):
     """Replace missing values in a SparseTensor.
@@ -19,14 +21,17 @@ def _fill_in_missing(x):
             default_value), axis=1)
 
 
-def preprocessing_fn(inputs):
+def preprocessing_fn(inputs, tokenizer):
     """Preprocesses Dataset."""
 
     outputs = {}
 
+    key = Feature.transformed_name(Feature.FEATURE_KEY)
     # Fill in missing values and create dense tensors.
-    for key in Feature.FEATURE_KEYS:
-        outputs[Feature.transformed_name(key)] = _fill_in_missing(inputs[key])
+    outputs[key] = _fill_in_missing(inputs[key])
+
+    outputs[key] = tokenizer.texts_to_sequences(list(outputs[key]))
+    outputs[key] = sequence.pad_sequences(outputs[key], maxlen=MAX_SEQUENCE_LENGTH)
 
     # Convert label to dense tensor.
     outputs[Feature.transformed_name(Feature.LABEL_KEY)] = _fill_in_missing(inputs[Feature.LABEL_KEY])
