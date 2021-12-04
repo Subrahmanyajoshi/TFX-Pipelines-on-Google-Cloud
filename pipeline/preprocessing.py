@@ -1,8 +1,5 @@
-import os
-import pickle
 import tensorflow as tf
-from tensorflow.keras.preprocessing import sequence
-from tensorflow.keras.layers import TextVectorization
+import tensorflow_transform as tft
 
 from features import Feature
 
