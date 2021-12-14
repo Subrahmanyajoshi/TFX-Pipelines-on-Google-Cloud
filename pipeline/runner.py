@@ -15,7 +15,7 @@ class Runner(object):
 
     @staticmethod
     def run(pipeline_args: Namespace):
-        PipelineBuilder.build(pipeline_args)
+        PipelineBuilder.build(pipeline_args=pipeline_args)
 
 
 def main():
@@ -76,7 +76,6 @@ def main():
         pipeline_operator_funcs=kubeflow_dag_runner.get_default_pipeline_operator_funcs(
             strtobool(Config.USE_KFP_SA)),
         tfx_image=Config.TFX_IMAGE)
-
 
 
 if __name__ == '__main__':
