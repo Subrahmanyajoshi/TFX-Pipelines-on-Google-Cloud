@@ -5,14 +5,12 @@ import absl
 import keras_tuner
 import tensorflow as tf
 import tensorflow_transform as tft
-from features import Feature
-from tensorflow.keras import layers
-
 from tfx.components.trainer.executor import TrainerFnArgs
 from tfx.components.trainer.fn_args_utils import DataAccessor
 from tfx.components.tuner.component import TunerFnResult
 from tfx_bsl.tfxio import dataset_options
 
+from features import Feature
 
 EPOCHS = 1
 TRAIN_BATCH_SIZE = 64

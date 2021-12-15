@@ -3,20 +3,18 @@ from argparse import Namespace
 from distutils.util import strtobool
 
 import tensorflow_model_analysis as tfma
-
 from tfx.components import CsvExampleGen, StatisticsGen, SchemaGen, ExampleValidator, Transform, Trainer, Tuner, \
     Evaluator, InfraValidator, Pusher
 from tfx.components.base import executor_spec
 from tfx.components.trainer import executor as trainer_executor
-from tfx.dsl.components.common.importer import Importer
 from tfx.dsl.components.common.resolver import Resolver
 from tfx.dsl.input_resolution.strategies.latest_blessed_model_strategy import LatestBlessedModelStrategy
 from tfx.extensions.google_cloud_ai_platform.pusher import executor as ai_platform_pusher_executor
 from tfx.extensions.google_cloud_ai_platform.trainer import executor as ai_platform_trainer_executor
 from tfx.orchestration import pipeline
-from tfx.proto import example_gen_pb2, trainer_pb2, tuner_pb2, infra_validator_pb2, pusher_pb2
+from tfx.proto import example_gen_pb2, trainer_pb2, tuner_pb2, infra_validator_pb2
 from tfx.types import Channel
-from tfx.types.standard_artifacts import HyperParameters, Model, ModelBlessing
+from tfx.types.standard_artifacts import Model, ModelBlessing
 
 from pipeline.config import Config
 
