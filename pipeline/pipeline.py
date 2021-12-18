@@ -1,15 +1,15 @@
-
 from argparse import Namespace
 from distutils.util import strtobool
 
 import tensorflow_model_analysis as tfma
+from tfx import v1 as tfx
 from tfx.components import CsvExampleGen, StatisticsGen, SchemaGen, ExampleValidator, Transform, Trainer, Tuner, \
-    Evaluator, InfraValidator, Pusher
+    Evaluator, InfraValidator
 from tfx.components.base import executor_spec
 from tfx.components.trainer import executor as trainer_executor
 from tfx.dsl.components.common.resolver import Resolver
 from tfx.dsl.input_resolution.strategies.latest_blessed_model_strategy import LatestBlessedModelStrategy
-from tfx.extensions.google_cloud_ai_platform.pusher import executor as ai_platform_pusher_executor
+from tfx.extensions.google_cloud_ai_platform.pusher.component import Pusher
 from tfx.extensions.google_cloud_ai_platform.trainer import executor as ai_platform_trainer_executor
 from tfx.orchestration import pipeline
 from tfx.proto import example_gen_pb2, trainer_pb2, tuner_pb2, infra_validator_pb2
@@ -25,14 +25,14 @@ class PipelineBuilder(object):
 
     @staticmethod
     def build(pipeline_args: Namespace):
-        pipeline_name = Config.PIPELINE_NAME,
-        pipeline_root = pipeline_args.pipeline_root,
-        data_root_uri = pipeline_args.data_root_uri,
-        train_steps = pipeline_args.train_steps,
-        eval_steps = pipeline_args.eval_steps,
-        enable_tuning = strtobool(Config.ENABLE_TUNING),
-        ai_platform_training_args = pipeline_args.ai_platform_training_args,
-        ai_platform_serving_args = pipeline_args.ai_platform_serving_args,
+        pipeline_name = Config.PIPELINE_NAME
+        pipeline_root = pipeline_args.pipeline_root
+        data_root_uri = pipeline_args.data_root_uri
+        train_steps = pipeline_args.train_steps
+        eval_steps = pipeline_args.eval_steps
+        enable_tuning = strtobool(Config.ENABLE_TUNING)
+        ai_platform_training_args = pipeline_args.ai_platform_training_args
+        ai_platform_serving_args = pipeline_args.ai_platform_serving_args
         beam_pipeline_args = pipeline_args.beam_pipeline_args
         enable_cache = False
 
@@ -63,7 +63,6 @@ class PipelineBuilder(object):
             module_file=PipelineBuilder.TRANSFORM_MODULE)
 
         if enable_tuning:
-
             tuner = Tuner(
                 module_file=PipelineBuilder.TRAINER_MODULE_FILE,
                 examples=transform.outputs['transformed_examples'],
@@ -152,7 +151,8 @@ class PipelineBuilder(object):
             model=trainer.outputs['model'],
             model_blessing=model_analyzer.outputs['blessing'],
             infra_blessing=infra_validator.outputs['blessing'],
-            custom_config={ai_platform_pusher_executor.SERVING_ARGS_KEY: ai_platform_serving_args})
+            custom_config={tfx.extensions.google_cloud_ai_platform.experimental.PUSHER_SERVING_ARGS_KEY: \
+                               ai_platform_serving_args})
 
         components = [
             example_gen,
@@ -178,4 +178,3 @@ class PipelineBuilder(object):
             enable_cache=enable_cache,
             beam_pipeline_args=beam_pipeline_args
         )
-
