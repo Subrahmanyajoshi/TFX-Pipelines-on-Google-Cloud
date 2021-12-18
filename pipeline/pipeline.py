@@ -16,7 +16,7 @@ from tfx.proto import example_gen_pb2, trainer_pb2, tuner_pb2, infra_validator_p
 from tfx.types import Channel
 from tfx.types.standard_artifacts import Model, ModelBlessing
 
-from pipeline.config import Config
+from config import Config
 
 
 class PipelineBuilder(object):
