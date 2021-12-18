@@ -1,6 +1,5 @@
 import os
 
-
 class Config:
     """Sets configuration vars."""
     # Lab user environment resource settings
@@ -8,7 +7,7 @@ class Config:
     PROJECT_ID = os.getenv("PROJECT_ID", "text-analysis-323506")
     ARTIFACT_STORE_URI = os.getenv("ARTIFACT_STORE_URI", "gs://text-analysis-323506-artifact-store")
     CUSTOM_SERVICE_ACCOUNT = os.getenv("CUSTOM_SERVICE_ACCOUNT",
-                                       "<>")
+                                       "my-api-sa@text-analysis-323506.iam.gserviceaccount.com")
     # Lab user runtime environment settings
     PIPELINE_NAME = os.getenv("PIPELINE_NAME", "covertype_training")
     MODEL_NAME = os.getenv("MODEL_NAME", "covertype_classifier")
