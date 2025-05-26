@@ -52,3 +52,5 @@ class Config:
     # Flag to enable/disable the Tuner component in the pipeline.
     # Stored as a string ("True" or "False") and converted to boolean in the pipeline script.
     ENABLE_TUNING = os.getenv("ENABLE_TUNING", "True")
+    
+    LABEL_KEY = os.getenv("LABEL_KEY", "Cover_Type")

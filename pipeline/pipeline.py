@@ -48,8 +48,8 @@ class PipelineBuilder(object):
         pipeline_name = Config.PIPELINE_NAME
         pipeline_root = pipeline_args.pipeline_root
         data_root_uri = pipeline_args.data_root_uri
-        train_steps = pipeline_args.train_steps
-        eval_steps = pipeline_args.eval_steps
+        train_steps = pipeline_args.train_steps.default
+        eval_steps = pipeline_args.eval_steps.default
 
         # Convert ENABLE_TUNING from string (from Config) to boolean
         enable_tuning_str = Config.ENABLE_TUNING
@@ -114,11 +114,8 @@ class PipelineBuilder(object):
         # Trains the model.
         # Can use AI Platform Training for distributed training.
         trainer = Trainer(
-            # custom_executor_spec is used if not running on AI Platform.
-            # For AI Platform, custom_config handles the execution.
-            custom_executor_spec=executor_spec.ExecutorClassSpec(trainer_executor.GenericExecutor),
             module_file=PipelineBuilder.TRAINER_MODULE_FILE,
-            transformed_examples=transform.outputs['transformed_examples'],
+            examples=transform.outputs['transformed_examples'],
             schema=schema_gen.outputs['schema'],
             transform_graph=transform.outputs['transform_graph'],
             # Uses hyperparameters from Tuner if enabled, otherwise None (model.py should handle default hparams).
@@ -211,7 +208,7 @@ class PipelineBuilder(object):
             infra_blessing=infra_validator.outputs['blessing'], # Use blessing from InfraValidator
             custom_config={
                 # Use the non-experimental key for TFX >= 1.0 for AI Platform Pusher.
-                tfx.extensions.google_cloud_ai_platform.PUSHER_SERVING_ARGS_KEY: ai_platform_serving_args
+                tfx.extensions.google_cloud_ai_platform.SERVING_ARGS_KEY: ai_platform_serving_args
             }
         ).with_id("model_pusher") # Explicit ID
 
