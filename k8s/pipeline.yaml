@@ -1,0 +1,91 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: pipeline-runner
+  namespace: kubeflow
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: pipeline-runner-role
+  namespace: kubeflow
+rules:
+- apiGroups: [""]
+  resources: ["pods", "pods/log", "secrets", "services"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: ["apps"]
+  resources: ["deployments"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: ["kubeflow.org"]
+  resources: ["*"]
+  verbs: ["*"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: pipeline-runner-binding
+  namespace: kubeflow
+subjects:
+- kind: ServiceAccount
+  name: pipeline-runner
+  namespace: kubeflow
+roleRef:
+  kind: Role
+  name: pipeline-runner-role
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pipeline-data
+  namespace: kubeflow
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tfx-pipeline
+  namespace: kubeflow
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tfx-pipeline
+  template:
+    metadata:
+      labels:
+        app: tfx-pipeline
+    spec:
+      serviceAccountName: pipeline-runner
+      containers:
+      - name: pipeline
+        image: gcr.io/${PROJECT_ID}/tfx-pipeline:latest
+        env:
+        - name: PROJECT_ID
+          valueFrom:
+            configMapKeyRef:
+              name: gcp-config
+              key: project-id
+        - name: GCP_REGION
+          valueFrom:
+            configMapKeyRef:
+              name: gcp-config
+              key: region
+        volumeMounts:
+        - name: gcp-credentials
+          mountPath: /gcp-credentials
+          readOnly: true
+        - name: pipeline-data
+          mountPath: /pipeline/data
+      volumes:
+      - name: gcp-credentials
+        secret:
+          secretName: gcp-credentials
+      - name: pipeline-data
+        persistentVolumeClaim:
+          claimName: pipeline-data 
